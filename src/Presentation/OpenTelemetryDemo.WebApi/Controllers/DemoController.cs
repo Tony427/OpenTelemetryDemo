@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using OpenTelemetry.Trace;
 
 namespace OpenTelemetryDemo.WebApi.Controllers;
 
@@ -111,4 +112,3 @@ public class DemoController : ControllerBase
         }
     }
 }
-
