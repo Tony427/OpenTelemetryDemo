@@ -73,118 +73,32 @@ builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<OpenTelemetryDemo.Application.Weather.IWeatherService,
     OpenTelemetryDemo.Infrastructure.Weather.OpenMeteoWeatherService>();
+// expose telemetry singletons for controllers
+builder.Services.AddSingleton(meter);
+builder.Services.AddSingleton(activitySource);
+builder.Services.AddSingleton(greetingCounter);
+builder.Services.AddSingleton(requestDuration);
 
 var app = builder.Build();
 
-// Weather endpoint using IWeatherService (Application layer)
-app.MapGet("/weather", async (
-    double? lat,
-    double? lon,
-    OpenTelemetryDemo.Application.Weather.IWeatherService weatherService,
-    ILogger<Program> logger) =>
-{
-    var latitude = lat ?? 25.0330;   // Taipei default
-    var longitude = lon ?? 121.5654;
-
-    using var activity = activitySource.StartActivity("GetCurrentWeather");
-    activity?.SetTag("weather.latitude", latitude);
-    activity?.SetTag("weather.longitude", longitude);
-
-    logger.LogInformation("Fetching weather for {Lat},{Lon}", latitude, longitude);
-
-    var result = await weatherService.GetCurrentAsync(latitude, longitude);
-    return Results.Ok(result);
-});
+// Map attribute-routed controllers
+app.MapControllers();
 
 // ============================================
 // 5. 定義 API 端點
 // ============================================
 
 // 簡單的 Hello World 端點
-app.MapGet("/", (ILogger<Program> logger) =>
-{
-    using var activity = activitySource.StartActivity("HandleRootRequest");
-    activity?.SetTag("greeting.type", "simple");
 
-    logger.LogInformation("處理根路徑請求");
-    greetingCounter.Add(1, new KeyValuePair<string, object?>("endpoint", "/"));
-
-    return "Hello OpenTelemetry!";
-});
 
 // 示範自訂 Span 和指標的端點
-app.MapGet("/greet/{name}", async (string name, ILogger<Program> logger) =>
-{
-    var sw = Stopwatch.StartNew();
 
-    // 建立自訂的 Activity (Span)
-    using var activity = activitySource.StartActivity("GreetUser", ActivityKind.Internal);
-    activity?.SetTag("user.name", name);
-    activity?.SetTag("greeting.language", "zh-TW");
-
-    logger.LogInformation("問候使用者 {UserName}", name);
-
-    // 模擬一些處理時間
-    await Task.Delay(Random.Shared.Next(50, 200));
-
-    // 記錄事件
-    activity?.AddEvent(new ActivityEvent("使用者驗證完成"));
-
-    // 記錄指標
-    greetingCounter.Add(1,
-        new KeyValuePair<string, object?>("endpoint", "/greet"),
-        new KeyValuePair<string, object?>("user", name));
-
-    sw.Stop();
-    requestDuration.Record(sw.ElapsedMilliseconds,
-        new KeyValuePair<string, object?>("endpoint", "/greet"));
-
-    logger.LogInformation("請求處理完成，耗時 {Duration}ms", sw.ElapsedMilliseconds);
-
-    return new { Message = $"你好，{name}！", Timestamp = DateTime.UtcNow };
-});
 
 // 示範錯誤處理和 Exception 記錄
-app.MapGet("/error", (ILogger<Program> logger) =>
-{
-    using var activity = activitySource.StartActivity("ErrorExample");
 
-    try
-    {
-        logger.LogWarning("即將拋出測試例外");
-        throw new InvalidOperationException("這是一個測試錯誤");
-    }
-    catch (Exception ex)
-    {
-        // 記錄例外到 Activity
-        activity?.RecordException(ex);
-        activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-
-        // 記錄到日誌
-        logger.LogError(ex, "處理請求時發生錯誤");
-
-        return Results.Problem(
-            title: "發生錯誤",
-            detail: ex.Message,
-            statusCode: 500
-        );
-    }
-});
 
 // 示範呼叫外部 API (追蹤 HTTP Client)
-app.MapGet("/external", async (IHttpClientFactory httpClientFactory, ILogger<Program> logger) =>
-{
-    using var activity = activitySource.StartActivity("CallExternalApi");
 
-    var client = httpClientFactory.CreateClient();
-    logger.LogInformation("呼叫外部 API");
-
-    try
-    {
-        var response = await client.GetStringAsync("https://api.github.com/repos/open-telemetry/opentelemetry-dotnet");
-        logger.LogInformation("外部 API 呼叫成功");
-
-        return Results.Ok(new { Status = "Success", ResponseLength = response.Length });
     }
     catch (Exception ex)
     {
