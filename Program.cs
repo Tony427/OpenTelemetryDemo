@@ -37,6 +37,7 @@ builder.Services.AddOpenTelemetry()
         .AddSource(activitySource.Name)
         // 輸出到 Console (開發用)
         .AddConsoleExporter()
+        .AddOtlpExporter()
         // (可選) 輸出到 Jaeger/OTLP
         // .AddOtlpExporter(options =>
         //     options.Endpoint = new Uri("http://localhost:4317"))
