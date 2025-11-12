@@ -71,8 +71,30 @@ builder.Logging.AddOpenTelemetry(logging =>
 // ============================================
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<OpenTelemetryDemo.Application.Weather.IWeatherService,
+    OpenTelemetryDemo.Infrastructure.Weather.OpenMeteoWeatherService>();
 
 var app = builder.Build();
+
+// Weather endpoint using IWeatherService (Application layer)
+app.MapGet("/weather", async (
+    double? lat,
+    double? lon,
+    OpenTelemetryDemo.Application.Weather.IWeatherService weatherService,
+    ILogger<Program> logger) =>
+{
+    var latitude = lat ?? 25.0330;   // Taipei default
+    var longitude = lon ?? 121.5654;
+
+    using var activity = activitySource.StartActivity("GetCurrentWeather");
+    activity?.SetTag("weather.latitude", latitude);
+    activity?.SetTag("weather.longitude", longitude);
+
+    logger.LogInformation("Fetching weather for {Lat},{Lon}", latitude, longitude);
+
+    var result = await weatherService.GetCurrentAsync(latitude, longitude);
+    return Results.Ok(result);
+});
 
 // ============================================
 // 5. 定義 API 端點

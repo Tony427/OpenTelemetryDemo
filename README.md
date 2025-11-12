@@ -1,98 +1,111 @@
 # OpenTelemetry .NET Demo
 
-一鍵啟動 .NET 9 API + OpenTelemetry Collector + Jaeger + Prometheus + Grafana 的觀測性示範專案。
-
-參考：Microsoft .NET Observability with OpenTelemetry
+Demo: .NET 9 Minimal API with OpenTelemetry Collector, Jaeger, Prometheus, and Grafana. Shows end-to-end tracing, metrics, and logs, including an external HTTP call for weather data.
 
 ---
 
-## 內容與架構
+## Overview
 
-- API: `src/Presentation/OpenTelemetryDemo.WebApi`（.NET 9 Minimal API，導出 OTLP、Prometheus 指標；組件名稱 `OpenTelemetryDemo`）
-- OTel Collector: 接收 OTLP，轉送至 Jaeger（Traces），自身輸出 Metrics
-- Jaeger: Trace UI（16686）
-- Prometheus: 指標收集與查詢（9090）
-- Grafana: 視覺化儀表板（3000），預設連線 Prometheus 與 Jaeger
+- API: `src/Presentation/OpenTelemetryDemo.WebApi` (OpenTelemetry for tracing, metrics, logs; service name `OpenTelemetryDemo.Api`).
+- OTel Collector: receives OTLP, exports to Jaeger (traces) and logs own telemetry.
+- Jaeger: Trace UI.
+- Prometheus: Scrapes API metrics and Collector metrics.
+- Grafana: Preprovisioned datasources for Prometheus and Jaeger.
 
-專案結構（DDD 分層，僅整理目錄，未新增功能）
+DDD structure (now present):
 - `src/Domain/`
-- `src/Application/`
-- `src/Infrastructure/`
+- `src/Application/` (contains weather contracts)
+- `src/Infrastructure/` (contains weather implementation)
 - `src/Presentation/OpenTelemetryDemo.WebApi/`
 
 Ports
-- API: `http://localhost:8080`（Metrics: `/metrics`）
+- API: `http://localhost:8080` (metrics at `/metrics`)
 - Jaeger UI: `http://localhost:16686`
 - Prometheus: `http://localhost:9090`
-- Grafana: `http://localhost:3000`（admin/admin）
+- Grafana: `http://localhost:3000` (admin/admin)
 
 ---
 
-## 快速開始
+## Prerequisites
 
-前置需求
-- Docker Desktop（必需）
-- .NET SDK 9.0（選用，僅本機直接執行/開發時需要）
+- Docker Desktop
+- .NET SDK 9.0 (optional — for local build/test)
 
-啟動與關閉
+Run
 ```bash
-# 建置並啟動所有服務
 docker compose up -d --build
-
-# 查看服務狀態
 docker compose ps
-
-# 停止並移除
+# tear down
 docker compose down
 ```
 
-產生一些資料
+Quick test
 ```bash
 curl http://localhost:8080/
 curl http://localhost:8080/greet/test
+curl "http://localhost:8080/weather"
+curl "http://localhost:8080/weather?lat=25.04&lon=121.56"
 ```
 
-觀察
-- Traces: 打開 Jaeger，搜尋 service = `OpenTelemetryDemo.Api`
-- Metrics: 在 Prometheus 查詢 `greetings_count`, `request_duration`, 或 ASP.NET 內建指標
-- Grafana: 已預設 Prometheus/Jaeger 資料來源，可自行建立儀表板
+Observe
+- Traces: in Jaeger, service = `OpenTelemetryDemo.Api`.
+- Metrics: in Prometheus (custom: `greetings.count`, `request.duration`; plus ASP.NET/runtime metrics).
+- Grafana: add dashboards using the preprovisioned datasources.
 
 ---
 
-## 重要設定與檔案
+## Key Configuration
 
 - `src/Presentation/OpenTelemetryDemo.WebApi/Program.cs`
-  - 已啟用 `.AddOtlpExporter()`，端點由環境變數 `OTEL_EXPORTER_OTLP_ENDPOINT` 提供
-  - 已啟用 `.AddPrometheusExporter()` 與 `app.MapPrometheusScrapingEndpoint()`
+  - Tracing: `.AddAspNetCoreInstrumentation()`, `.AddHttpClientInstrumentation()`, `.AddSource(...)`, `.AddConsoleExporter()`, `.AddOtlpExporter()`.
+  - Metrics: `.AddAspNetCoreInstrumentation()`, `.AddRuntimeInstrumentation()`, `.AddMeter(...)`, `.AddConsoleExporter()`, `.AddPrometheusExporter()`, `app.MapPrometheusScrapingEndpoint()`.
+  - Logging: `builder.Logging.AddOpenTelemetry(...)`.
+  - DI: `IWeatherService` → `OpenMeteoWeatherService`.
 
 - `docker-compose.yml`
-  - 服務：`api`、`otel-collector`、`prometheus`、`grafana`、`jaeger`
-  - `api` 設定 `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317`
-  - 對外映射埠：8080/16686/9090/3000/13133/8888
+  - Services: `api`, `otel-collector`, `prometheus`, `grafana`, `jaeger`.
+  - `api` sets `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317`.
+  - Exposed ports: 8080/16686/9090/3000/13133/8888/4317/4318.
 
-- `Dockerfile`（根目錄）：用於建置 `OpenTelemetryDemo.WebApi` 並於 8080 執行
-- `otel-collector-config.yaml`（根目錄）：接收 OTLP（gRPC/HTTP），轉送 Jaeger OTLP（`jaeger:4317`）
-- `prometheus.yml`（根目錄）：抓取 `api:8080/metrics` 與 `otel-collector:8888`
-- `grafana/provisioning/datasources/datasources.yml`：預設 Prometheus 與 Jaeger 資料來源
-
----
-
-## 常見問題
-
-- 檔案副檔名 `.yml` vs `.yaml` 有差嗎？
-  - 沒有功能上的差別，兩者對工具而言等價；屬於慣例與風格選擇。
-  - Docker/Compose、Prometheus、Grafana 都能接受兩種副檔名。
-  - 本專案同時存在 `.yml` 與 `.yaml`，僅為維持各工具生態的常見習慣，若需要也可統一其中一種。
-
-- 埠號衝突
-  - 如果本機已有程式佔用 16686/9090/3000 等埠，請調整 `docker-compose.yml` 中對外映射的左側主機埠。
+- `Dockerfile`: builds and publishes `OpenTelemetryDemo.WebApi` on port 8080.
+- `otel-collector-config.yaml`: OTLP receiver (gRPC/HTTP); exports traces to Jaeger (`jaeger:4317`) and logging; exposes health `:13133`, metrics `:8888`.
+- `prometheus.yml`: scrapes `api:8080/metrics` and `otel-collector:8888`.
+- `grafana/provisioning/datasources/datasources.yml`: Prometheus and Jaeger datasources.
 
 ---
 
-## API 範例端點
+## API Endpoints
 
-- `GET /`：簡單回應與 Trace
-- `GET /greet/{name}`：自訂標籤、延遲與 Histogram 記錄
-- `GET /error`：拋出例外並記錄於 Activity 與 Logs
-- `GET /external`：示範外部 HTTP 呼叫（可能受網路/防火牆影響）
+- `GET /` — Hello world; simple trace and counter.
+- `GET /greet/{name}` — Simulated work with Activity events; increments `greetings.count`; records `request.duration`.
+- `GET /error` — Demonstrates exception recording on Activity and logs.
+- `GET /external` — Makes an outbound HTTP request (generates HttpClient span).
+- `GET /weather?lat={lat}&lon={lon}` — Uses application-layer `IWeatherService` to call the external weather API (Open‑Meteo). Defaults to Taipei (lat 25.0330, lon 121.5654). Starts `GetCurrentWeather` Activity and produces an HttpClient child span to the external API, demonstrating API → external service trace.
+
+---
+
+## Weather External Service
+
+- Open‑Meteo Current Weather API (no API key):
+  - `https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true`
+
+Response is mapped into `WeatherDto` with fields: latitude, longitude, temperature, windSpeed, weatherCode, time.
+
+---
+
+## DDD Projects (New)
+
+- Domain: `src/Domain/OpenTelemetryDemo.Domain`
+- Application: `src/Application/OpenTelemetryDemo.Application`
+  - `Weather/IWeatherService`
+  - `Weather/WeatherDto`
+- Infrastructure: `src/Infrastructure/OpenTelemetryDemo.Infrastructure`
+  - `Weather/OpenMeteoWeatherService` (uses `IHttpClientFactory`)
+
+---
+
+## Notes
+
+- Vulnerability warnings may appear for `OpenTelemetry.Instrumentation.AspNetCore` and `OpenTelemetry.Instrumentation.Http` 1.7.1; consider upgrading to patched versions when available.
+- The sample file `OpenTelemetryDemo.http` contains a default template route; it is not used by this demo.
 

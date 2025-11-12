@@ -17,4 +17,9 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.7.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\Application\OpenTelemetryDemo.Application\OpenTelemetryDemo.Application.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\OpenTelemetryDemo.Infrastructure\OpenTelemetryDemo.Infrastructure.csproj" />
+  </ItemGroup>
+
 </Project>
