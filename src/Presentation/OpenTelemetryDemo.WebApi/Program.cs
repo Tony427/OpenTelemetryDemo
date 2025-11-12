@@ -85,30 +85,6 @@ var app = builder.Build();
 app.MapControllers();
 
 // ============================================
-// 5. 定義 API 端點
-// ============================================
-
-// 簡單的 Hello World 端點
-
-
-// 示範自訂 Span 和指標的端點
-
-
-// 示範錯誤處理和 Exception 記錄
-
-
-// 示範呼叫外部 API (追蹤 HTTP Client)
-
-    }
-    catch (Exception ex)
-    {
-        activity?.RecordException(ex);
-        logger.LogError(ex, "外部 API 呼叫失敗");
-        return Results.Problem("外部 API 呼叫失敗");
-    }
-});
-
-// ============================================
 // 6. 暴露 Prometheus 指標端點
 // ============================================
 app.MapPrometheusScrapingEndpoint();
