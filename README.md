@@ -8,11 +8,17 @@
 
 ## 內容與架構
 
-- API: `OpenTelemetryDemo`（.NET 9 Minimal API，導出 OTLP、Prometheus 指標）
+- API: `src/Presentation/OpenTelemetryDemo.WebApi`（.NET 9 Minimal API，導出 OTLP、Prometheus 指標；組件名稱 `OpenTelemetryDemo`）
 - OTel Collector: 接收 OTLP，轉送至 Jaeger（Traces），自身輸出 Metrics
 - Jaeger: Trace UI（16686）
 - Prometheus: 指標收集與查詢（9090）
 - Grafana: 視覺化儀表板（3000），預設連線 Prometheus 與 Jaeger
+
+專案結構（DDD 分層，僅整理目錄，未新增功能）
+- `src/Domain/`
+- `src/Application/`
+- `src/Infrastructure/`
+- `src/Presentation/OpenTelemetryDemo.WebApi/`
 
 Ports
 - API: `http://localhost:8080`（Metrics: `/metrics`）
@@ -25,8 +31,8 @@ Ports
 ## 快速開始
 
 前置需求
-- .NET SDK 9.0（本專案 `TargetFramework=net9.0`）
-- Docker Desktop
+- Docker Desktop（必需）
+- .NET SDK 9.0（選用，僅本機直接執行/開發時需要）
 
 啟動與關閉
 ```bash
@@ -55,19 +61,19 @@ curl http://localhost:8080/greet/test
 
 ## 重要設定與檔案
 
-- `Program.cs`
-  - 已啟用 `.AddOtlpExporter()`，實際端點由環境變數 `OTEL_EXPORTER_OTLP_ENDPOINT` 提供
+- `src/Presentation/OpenTelemetryDemo.WebApi/Program.cs`
+  - 已啟用 `.AddOtlpExporter()`，端點由環境變數 `OTEL_EXPORTER_OTLP_ENDPOINT` 提供
   - 已啟用 `.AddPrometheusExporter()` 與 `app.MapPrometheusScrapingEndpoint()`
 
 - `docker-compose.yml`
-  - 新增 `api`、`otel-collector`、`prometheus`、`grafana` 與既有 `jaeger`
-  - `api` 內設 `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317`
-  - 只將需要對外的 UI/監控埠對外映射：8080/16686/9090/3000/13133/8888
+  - 服務：`api`、`otel-collector`、`prometheus`、`grafana`、`jaeger`
+  - `api` 設定 `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317`
+  - 對外映射埠：8080/16686/9090/3000/13133/8888
 
-- `Dockerfile`: 建置並發佈 .NET 9 應用，執行於 8080
-- `otel-collector-config.yaml`: 接收 OTLP（gRPC/HTTP），轉送 Jaeger OTLP（內部連線 `jaeger:4317`）
-- `prometheus.yml`: 抓取 `api:8080/metrics` 與 `otel-collector:8888`
-- `grafana/provisioning/datasources/datasources.yml`: 預設 Prometheus 與 Jaeger 資源
+- `Dockerfile`（根目錄）：用於建置 `OpenTelemetryDemo.WebApi` 並於 8080 執行
+- `otel-collector-config.yaml`（根目錄）：接收 OTLP（gRPC/HTTP），轉送 Jaeger OTLP（`jaeger:4317`）
+- `prometheus.yml`（根目錄）：抓取 `api:8080/metrics` 與 `otel-collector:8888`
+- `grafana/provisioning/datasources/datasources.yml`：預設 Prometheus 與 Jaeger 資料來源
 
 ---
 
