@@ -8,57 +8,73 @@ using OpenTelemetry.Logs;
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================
-// 1. 定義自訂的 Meter 和 ActivitySource
+// 1. Define custom Meter and ActivitySource
 // ============================================
 var meter = new Meter("OpenTelemetryDemo.App", "1.0.0");
 var activitySource = new ActivitySource("OpenTelemetryDemo.App");
 
-// 定義指標
+// Define metrics - demonstrating different metric types
 var greetingCounter = meter.CreateCounter<int>("greetings.count",
-    description: "計算問候次數");
+    description: "Counts greeting requests");
 var requestDuration = meter.CreateHistogram<double>("request.duration",
-    unit: "ms", description: "請求處理時間");
+    unit: "ms", description: "Request processing duration");
+
+// NEW: UpDownCounter - tracks current active requests (can increment and decrement)
+var activeRequestsCounter = meter.CreateUpDownCounter<int>("active_requests.count",
+    description: "Number of currently active requests");
+
+// NEW: ObservableGauge - tracks system memory usage (auto-collected periodically)
+var memoryGauge = meter.CreateObservableGauge("system.memory.used",
+    () => GC.GetTotalMemory(forceFullCollection: false) / 1024.0 / 1024.0,
+    unit: "MB",
+    description: "Current application memory usage in MB");
+
+// NEW: ObservableGauge for simulated cache size
+var cacheSize = 0;
+var cacheSizeGauge = meter.CreateObservableGauge("cache.size",
+    () => cacheSize,
+    description: "Number of items in cache");
 
 // ============================================
-// 2. 設定 OpenTelemetry
+// 2. Configure OpenTelemetry
 // ============================================
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource
         .AddService(serviceName: "OpenTelemetryDemo.Api",
                     serviceVersion: "1.0.0"))
 
-    // 設定 Tracing (分散式追蹤)
+    // Configure Tracing (Distributed Tracing)
     .WithTracing(tracing => tracing
-        // 自動追蹤 ASP.NET Core 請求
+        // Auto-instrument ASP.NET Core requests
         .AddAspNetCoreInstrumentation()
-        // 自動追蹤 HttpClient 呼叫
+        // Auto-instrument HttpClient calls
         .AddHttpClientInstrumentation()
-        // 加入我們自訂的 ActivitySource
+        // Add our custom ActivitySource
         .AddSource(activitySource.Name)
-        // 輸出到 Console (開發用)
+        // Export to Console (for development)
         .AddConsoleExporter()
         .AddOtlpExporter()
-        // (可選) 輸出到 Jaeger/OTLP
+        // (Optional) Export to Jaeger/OTLP
         // .AddOtlpExporter(options =>
         //     options.Endpoint = new Uri("http://localhost:4317"))
     )
 
-    // 設定 Metrics (指標)
+    // Configure Metrics
     .WithMetrics(metrics => metrics
-        // 自動收集 ASP.NET Core 指標
+        // Auto-collect ASP.NET Core metrics
         .AddAspNetCoreInstrumentation()
-        // 自動收集 .NET Runtime 指標
+        // Auto-collect .NET Runtime metrics
         .AddRuntimeInstrumentation()
-        // 加入我們自訂的 Meter
+        // Add our custom Meter
         .AddMeter(meter.Name)
-        // 輸出到 Console
+        // Export to Console
         .AddConsoleExporter()
-        // 暴露 Prometheus 端點
+        // Expose Prometheus scraping endpoint
         .AddPrometheusExporter()
     );
 
 // ============================================
-// 3. 設定 Logging (結構化日誌)
+// 3. Configure Logging (Structured Logging)
 // ============================================
 builder.Logging.AddOpenTelemetry(logging =>
 {
@@ -67,10 +83,14 @@ builder.Logging.AddOpenTelemetry(logging =>
 });
 
 // ============================================
-// 4. 加入服務
+// 4. Add Services
 // ============================================
 builder.Services.AddControllers();
 builder.Services.AddHttpClient();
+
+// 加入 Swagger/OpenAPI 支援
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 builder.Services.AddScoped<OpenTelemetryDemo.Application.Weather.IWeatherService,
     OpenTelemetryDemo.Infrastructure.Weather.OpenMeteoWeatherService>();
 // expose telemetry singletons for controllers
@@ -78,19 +98,27 @@ builder.Services.AddSingleton(meter);
 builder.Services.AddSingleton(activitySource);
 builder.Services.AddSingleton(greetingCounter);
 builder.Services.AddSingleton(requestDuration);
+builder.Services.AddSingleton(activeRequestsCounter);
 
 var app = builder.Build();
+
+// ============================================
+// 5. Configure Middleware Pipeline
+// ============================================
+// Enable Swagger (available in both development and production)
+app.UseSwagger();
+app.UseSwaggerUI();
 
 // Map attribute-routed controllers
 app.MapControllers();
 
 // ============================================
-// 6. 暴露 Prometheus 指標端點
+// 6. Expose Prometheus Metrics Endpoint
 // ============================================
 app.MapPrometheusScrapingEndpoint();
 
 // ============================================
-// 7. 啟動應用程式
+// 7. Run Application
 // ============================================
 app.Run();
 
