@@ -5,7 +5,7 @@ using System.Diagnostics;
 namespace OpenTelemetryDemo.WebApi.Controllers;
 
 [ApiController]
-[Route("weather")]
+[Route("api/[controller]")]
 public class WeatherController : ControllerBase
 {
     private readonly IWeatherService _weatherService;
