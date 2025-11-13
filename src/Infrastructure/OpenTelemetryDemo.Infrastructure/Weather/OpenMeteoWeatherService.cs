@@ -1,6 +1,7 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using OpenTelemetryDemo.Application.Weather;
 
 namespace OpenTelemetryDemo.Infrastructure.Weather;
@@ -56,14 +57,21 @@ public class OpenMeteoWeatherService : IWeatherService
     {
         public double Latitude { get; set; }
         public double Longitude { get; set; }
+
+        [JsonPropertyName("current_weather")]
         public CurrentWeather? CurrentWeather { get; set; }
     }
 
     private sealed class CurrentWeather
     {
         public double Temperature { get; set; }
+
+        [JsonPropertyName("windspeed")]
         public double Windspeed { get; set; }
+
+        [JsonPropertyName("weathercode")]
         public int Weathercode { get; set; }
+
         public DateTimeOffset Time { get; set; }
     }
 }
